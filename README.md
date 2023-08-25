@@ -1,23 +1,28 @@
-# mb2-0wire: "0Wire" RGB LED controller for MicroBit v2.
+# led-0wire: "0Wire" RGB LED controller
 Bart Massey 2023
 
-This crate demos control of a "0Wire" RGB LED controller for
-the MicroBit v2.
+This Rust crate provides control and voltage for a "0Wire"
+"programmable" RGB LED using the [CZineLight control
+protocol](https://cdn.sparkfun.com/assets/9/f/1/c/6/CZineLight_0-Wire_Communication_Protocol.pdf).
+The control protocol signals the LED using short power drops
+to get various power modes.
 
-This version features a partially soft voltage doubler
-circuit. A 100KHz square wave is output on P16 of the MB2
-edge connector. This output is used to drive a [Dickson charge
-pump](https://en.wikipedia.org/wiki/Voltage_doubler#Dickson_charge_pump)
-to provide a voltage around 6.5V open, adequate to fully
-drive the green and blue LEDs in the 0-wire. In (white)
-operation the LED draws about 10mA of current, pulling the
-doubler output down to about 3V.
+This crate has been tested with the SparkFun COM-21209 LED,
+for which Mouser supplies the [CZINELIGHT YBR-43FMRGB-A8686
+datasheet](https://www.mouser.com/datasheet/2/813/0_Wire_RGB_LED_Datasheet-3225050.pdf).
 
-An NMOS switch is used to provide the 0-wire signal for
-the LED, as the LED supply cannot be toggled quickly enough
-by manipulating the PWM due to capacitor discharge times.
+For 5V operation, nothing particularly special need be done:
+the LED can be hooked directly to a push-pull GPIO pin
+driven by this crate. The GPIO should be capable of
+providing 15mA of current. Best practice would be to limit
+the current to 18.5mA with a 270Ω resistor high-side.
 
-![Charge pump circuit](0wire-charge-pump.png)
+For 3.3V operation, the requirement of 3.2V typical for the
+green and blue components of the LED presents a
+problem. With standard GPIO drive, the voltage may be pulled
+down too far, leaving the green not so bright and the blue
+not visible. Instead, an NMOS low-side switch can be used to
+power the LED directly from 3.3V. This works.
 
 # License
 

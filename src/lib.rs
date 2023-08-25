@@ -1,9 +1,14 @@
 //! Driver for "0Wire" LED using CZineLight [control
 //! protocol](https://cdn.sparkfun.com/assets/9/f/1/c/6/CZineLight_0-Wire_Communication_Protocol.pdf).
 
-use crate::*;
+#![no_std]
 
 use thiserror_no_std::Error;
+
+use embedded_hal::{
+    blocking::delay::{DelayUs, DelayMs},
+    digital::v2::OutputPin,
+};
 
 /// Operating mode for LED.
 #[repr(u8)]
@@ -112,41 +117,27 @@ impl TryFrom<u8> for Color {
 }
 
 /// Contains endpoints necessary for LED control.
-pub struct Led0Wire {
-    delay: Delay,
-    pin_signal: Pin<Output<PushPull>>,
+pub struct Led0Wire<P, D> {
+    delay: D,
+    pin_signal: P,
 }
 
-// Amount of PWM clock counts for PWM output to be low.
-const PWM_DUTY: u16 = 40;
-
-impl Led0Wire {
+impl<P, D> Led0Wire<P, D>
+    where P: OutputPin, D: DelayMs<u16> + DelayUs<u16>
+{
     /// Create a new controller.
-    pub fn new<T: pwm::Instance>(
-        delay: Delay,
-        pin_signal: Pin<Output<PushPull>>,
-        pwm: pwm::Pwm<T>,
-        pin_pwm: Pin<Output<PushPull>>,
-    ) -> Self {
-        // Set up voltage doubler.
-        pwm
-            .set_output_pin(pwm::Channel::C0, pin_pwm)
-            .set_prescaler(pwm::Prescaler::Div1)
-            .set_counter_mode(pwm::CounterMode::Up)
-            .set_max_duty(2 * PWM_DUTY)
-            .enable();
-        pwm.set_duty_off_common(PWM_DUTY);
-
+    pub fn new(delay: D, pin_signal: P) -> Self {
         Self { delay, pin_signal }
     }
 
     /// Send the given command to this controller.
-    pub fn send_cmd(&mut self, f: Function, c: Color) {
+    pub fn send_cmd(&mut self, f: Function, c: Color) -> Result<(), P::Error> {
         // Emits a 200µs low pulse.
-        let mut pulser = |delay: &mut Delay| {
-            self.pin_signal.set_low().unwrap();
+        let mut pulser = |delay: &mut D| {
+            self.pin_signal.set_low()?;
             delay.delay_us(200u16);
-            self.pin_signal.set_high().unwrap();
+            self.pin_signal.set_high()?;
+            Ok(())
         };
 
         // Put a 50ms guard delay between commands, per the
@@ -154,7 +145,7 @@ impl Led0Wire {
         self.delay.delay_ms(50u16);
 
         // Transmit the pulse-encoded 7-bit command.
-        pulser(&mut self.delay);
+        pulser(&mut self.delay)?;
         let cmd = ((f as u8) << 4) | c as u8;
         for bit in (0..7).rev() {
             if (cmd >> bit) & 1 == 1 {
@@ -162,7 +153,9 @@ impl Led0Wire {
             } else {
                 self.delay.delay_ms(5u16);
             }
-            pulser(&mut self.delay);
+            pulser(&mut self.delay)?;
         }
+
+        Ok(())
     }
 }
